@@ -1,6 +1,16 @@
 # IP Intelligence Analyzer
 
-A Python tool that leverages Censys.io and Claude AI APIs to analyze IP addresses, determine their reputation, organizational details, and assess their trustworthiness.
+A Python tool that leverages results from network summary in Procmon, ip-api.com, and Togehter AI APIs to analyze IP addresses, determine their reputation, organizational details, and assess their trustworthiness.
+
+## Get Procmon
+
+https://learn.microsoft.com/en-us/sysinternals/downloads/procmon
+Run it for 5min - 30min.
+Export the network summary. 
+Put the network summary in the data/input directory.
+
+## Get Together AI API
+https://www.together.ai/
 
 ## Setup
 

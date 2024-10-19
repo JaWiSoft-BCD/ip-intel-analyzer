@@ -1,8 +1,8 @@
 import logging
 from typing import List, Dict
-from censys_client import CensysClient
+from ip_client import IPClient
 from csv_handler import CSVHandler
-from claude_client import ClaudeClient
+from togehter_client import TogetherClient
 from config import ConfigHandler
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -30,42 +30,54 @@ class IPIntelAnalyzer:
             self.logger.error("Failed to load API credentials")
             return False
 
-        self.censys_client = CensysClient(
-            credentials['CENSYS_API_ID'],
-            credentials['CENSYS_API_SECRET']
-        )
-        self.claude_client = ClaudeClient(credentials['CLAUDE_API_KEY'])
+        self.ip_client = IPClient()
+        self.togehter_client = TogetherClient(api_key=credentials['TOGETHER_API_KEY'])
         self.csv_handler = CSVHandler()
 
-        censys_connected = self.censys_client.connect()
-        claude_connected = self.claude_client.connect()
+        together_connected = self.togehter_client.connect()
         
-        if not censys_connected or not claude_connected:
-            self.logger.error("Failed to initialize one or more clients")
+        if not together_connected:
+            self.logger.error("Failed to initialize AI")
             return False
         
         return True
+    
 
-    def process_single_ip(self, ip: str) -> Dict:
+    def process_single_ip(self, network_record: List) -> Dict:
         """Process a single IP address through both APIs."""
-        # Get Censys data
-        censys_data = self.censys_client.get_ip_details(ip)
-        if not censys_data:
-            return {'ip': ip, 'error': 'Failed to retrieve Censys data'}
+        # Get IP data
+        ip_data = self.ip_client.get_ip_details(network_record[0])
+        network_dict = {
+            "ip" : network_record[0],
+            "total events" : network_record[1],
+            "connects" : network_record[2],
+            "disconnects" : network_record[3],
+            "sends" : network_record[4],
+            "receives" : network_record[5],
+            "send bytes" : network_record[6],
+            "received bytes" : network_record[7],
+            "country": ip_data.get("country"),
+            "organisation": ip_data.get("org"),
+            "isp": ip_data.get("isp")
+        }
+        if not ip_data:
+            return {'ip': network_record, 'error': 'Failed to retrieve IP data'}
 
-        # Get Claude analysis
-        final_data = self.claude_client.analyze_ip_data(censys_data)
+        final_data = self.togehter_client.analyze_ip_data(ip_data=ip_data, ip=network_record[0], total_events=network_record[1], connects=network_record[2], disconnects=network_record[3], sends=network_record[4], receives=network_record[5], send_bytes=network_record[6], receive_bytes=network_record[7])
+
         if not final_data:
-            return {'ip': ip, 'error': 'Failed to perform AI analysis'}
-        print(final_data)
-        return final_data
+            return {'ip': network_record, 'error': 'Failed to perform AI analysis'}
+        
+        merged_dict = network_dict.copy()
+        merged_dict.update(final_data)
+        return merged_dict
 
-    def process_ip_list(self, ip_list: List[str], max_workers: int = 5) -> List[Dict]:
+    def process_ip_list(self, netwok_summary_list: List[List[str]], max_workers: int = 5) -> List[Dict]:
         """Process a list of IPs concurrently."""
         results = []
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_to_ip = {executor.submit(self.process_single_ip, ip): ip 
-                          for ip in ip_list}
+            future_to_ip = {executor.submit(self.process_single_ip, network_record): network_record 
+                          for network_record in netwok_summary_list}
             
             for future in as_completed(future_to_ip):
                 ip = future_to_ip[future]
@@ -94,11 +106,11 @@ class IPIntelAnalyzer:
         """
         try:
             # Read IPs from CSV
-            ip_list = self.csv_handler.read_ip_list(input_filename)
-            self.logger.info(f"Processing {len(ip_list)} IP addresses")
+            network_summary = self.csv_handler.read_network_summary(input_filename)
+            self.logger.info(f"Processing {len(network_summary)} IP addresses")
 
             # Process IPs
-            results = self.process_ip_list(ip_list)
+            results = self.process_ip_list(network_summary)
 
             # Write results to CSV
             output_file = self.csv_handler.write_analysis_results(results)

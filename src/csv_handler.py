@@ -31,7 +31,7 @@ class CSVHandler:
         self.input_dir.mkdir(parents=True, exist_ok=True)
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
-    def read_ip_list(self, filename: str) -> List[str]:
+    def read_network_summary(self, filename: str) -> List[str]:
         """
         Read IP addresses from a CSV file.
         
@@ -42,22 +42,36 @@ class CSVHandler:
             List of IP addresses
         """
         file_path = self.input_dir / filename
-        ip_list = []
+        summary_list = []
         
         try:
             with open(file_path, 'r', newline='') as csvfile:
                 reader = csv.DictReader(csvfile)
                 # Check if 'ip' column exists
-                if 'ip' not in reader.fieldnames:
-                    raise ValueError("CSV file must contain an 'ip' column")
+                if 'Path' not in reader.fieldnames:
+                    raise ValueError("CSV file must contain 'Path' column")
+                
                 
                 for row in reader:
-                    ip = row['ip'].strip()
-                    if ip:  # Only add non-empty IPs
-                        ip_list.append(ip)
+                    ip = row['Path'].strip()
+                    if not ip:
+                        continue
+                    if "." not in ip:
+                        continue
+                    if ":" in ip:
+                        colon_index = ip.index(":")
+                        ip = ip[:colon_index]
+                    total_events = row['Total Events']
+                    connects = row['Connects']
+                    disconnects = row['Disconnects']
+                    sends = row['Sends']
+                    receives = row['Receives']
+                    send_bytes = row['Send Bytes']
+                    recieve_bytes = row['Receive Bytes']
+                    summary_list.append([ip, total_events, connects, disconnects, sends, receives, send_bytes, recieve_bytes])
                 
-            self.logger.info(f"Successfully read {len(ip_list)} IPs from {filename}")
-            return ip_list
+            self.logger.info(f"Successfully read {len(summary_list)} IPs from {filename}")
+            return summary_list
             
         except Exception as e:
             self.logger.error(f"Error reading IP list from {filename}: {str(e)}")
