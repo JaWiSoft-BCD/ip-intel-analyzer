@@ -13,16 +13,7 @@ class TogetherClient:
         self.api_key = api_key
         self.client = None
         self.setup_logging()
-        self.system_prompt = """
-        You are a cybersecurity expert analyzing IP addresses and their associated data. 
-        For each IP, analyze the provided information and determine:
-        1. Trustworthiness based on organization and services
-        2. Primary purpose/usage of the IP
-        3. Potential security concerns
-        4. Geographic relevance
-        
-        Provide a concise assessment focusing on these aspects.
-        """
+
 
     def setup_logging(self):
         """Configure logging for the Togehter client."""
@@ -55,62 +46,55 @@ class TogetherClient:
             # Format the IP data for analysis
             ip_text = ip_data.__str__()
             prompt = f"""
-            You are an expert Cybersecurity Analyst. 
-            You are reviewing the IP addresses from a Network Summarry retrieved from a Windows computer using Procmon. 
-            Please analyze this IP address data and provide a security assessment:
+            You are an expert Cybersecurity Analyst specializing in network behavior analysis and threat detection.
 
-            First look at the IP information. If it is in a private range assume that it may be safe, however if it has too many sends and receives be cautios.
+            INPUT DATA:
+            - Full IP Information in JSON: {ip_text}
+            - IP Address: {ip}
+            - Event Metrics:
+            * Total Events: {total_events}
+            * Connection Events: {connects} connects | {disconnects} disconnects
+            * Data Transfer: {sends} sends ({send_bytes} bytes) | {receives} receives ({receive_bytes} bytes)
 
-            Here is the information regarding the IP:
-            {ip_text}
-
-            Here is the event data:
+            ANALYSIS REQUIREMENTS:
+            Provide a security assessment in the following strict format:
             IP: {ip}
-            total_events = {total_events}
-            connects = {connects}
-            disconnects = {disconnects}
-            sends = {sends}
-            receives = {receives}
-            send_bytes = {send_bytes}
-            receive_bytes = {receive_bytes}
-            
-            
+            Trustworthiness: <insert score 1-100>
+            Primary Purpose: <single line description maximum 20 words. no special characters><.>
+            Security Concerns: <start with YES or NO><.><space><insert explanation maximum 15 words no special characters><.>
+            Recommendation: <start with either 'No action required' or 'Requires Attention'><.><space><if attention needed add maximum 20 words no special characters><.>
 
-            Strictly Provide your analysis in a structured format with the following fields:
-            - IP: Set the value to the IP you analysed
-            - Trustworthiness: Rating out of 100 (1 bing bad, 100 being safe)
-            - Primary Purpose: Guess as to which you thing the purpose would be in less than 20 words.
-            - Security Concerns: Start with saying either Yes or No. Then give 15 word summary reason.
-            - Recommendation: Start with say either No action required or give 20 word summary of what can be done.
+            CRITICAL FORMAT RULES:
+            1. Do not use any commas periods or special characters
+            2. Each field must be on a new line
+            3. Use exact field names as shown above
+            4. Keep all responses within specified word limits
+            5. Maintain consistent capitalization of field names
+            6. Use hyphens instead of commas or periods for separation
+            7. Ensure each field has exactly one colon followed by a space
+            8. Do not include any additional formatting or explanations
 
-            DO NOT USE Commas in your response as it will be put in a CSV. Use dashes or fullstops instead.
+            ANALYSIS GUIDELINES:
+            - Base Trustworthiness score on:
+            * Known IP reputation
+            * Organisaton and ISP result
+            * Communication patterns
+            * Data volume ratios
+            * Connection frequency
+            - Consider these risk factors:
+            * Unusual port usage
+            * Asymmetric data transfer
+            * Connection pattern anomalies
+            * Geographic location concerns
 
-            Your response must be ready to be parsed in the following code it's raw format:
-       
-        # Simple parsing based on field markers
-        current_field = None
-        for line in analysis.split('\n'):
-            line = line.strip()
-            lower_line = line.lower()
-
-            if 'trustworthiness' in lower_line and ':' in line:
-                current_field = 'trustworthiness'
-                parsed[current_field] = line.split(':', 1)[1].strip()
-            elif 'primary purpose' in lower_line and ':' in line:
-                current_field = 'primary_purpose'
-                parsed[current_field] = line.split(':', 1)[1].strip()
-            elif 'security concerns' in lower_line and ':' in line:
-                current_field = 'security_concerns'
-                parsed[current_field] = line.split(':', 1)[1].strip()
-            elif 'recommendation' in lower_line and ':' in line:
-                current_field = 'recommendation'
-                parsed[current_field] = line.split(':', 1)[1].strip()
-            elif current_field and line:
-                parsed[current_field] += ' ' + line
-            
-
+            Your response must be directly parseable by the following format indicators:
+            - Line starts with field name followed by colon
+            - Single space after colon
+            - No line breaks within fields
+            - No extra whitespace
+            - No additional formatting
             """
-
+       
             # Get Together's analysis
             response = self.client.chat.completions.create(
                 model="meta-llama/Llama-3.2-11B-Vision-Instruct-Turbo",
@@ -127,9 +111,9 @@ class TogetherClient:
 
                 ],
                 max_tokens=300,
-                temperature=0.7,
-                top_p=0.7,
-                top_k=50,
+                temperature=0.9,
+                top_p=0.2,
+                top_k=40,
                 repetition_penalty=1,
                 stop=["<|eot_id|>","<|eom_id|>"],
                 stream=True

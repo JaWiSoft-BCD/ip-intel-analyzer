@@ -6,8 +6,7 @@ from togehter_client import TogetherClient
 from config import ConfigHandler
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import sys
-
+from utils import progress_tracker
 class IPIntelAnalyzer:
     def __init__(self):
         """Initialize the IP Intelligence Analyzer."""
@@ -60,37 +59,50 @@ class IPIntelAnalyzer:
             "organisation": ip_data.get("org"),
             "isp": ip_data.get("isp")
         }
-        if not ip_data:
-            return {'ip': network_record, 'error': 'Failed to retrieve IP data'}
 
         final_data = self.togehter_client.analyze_ip_data(ip_data=ip_data, ip=network_record[0], total_events=network_record[1], connects=network_record[2], disconnects=network_record[3], sends=network_record[4], receives=network_record[5], send_bytes=network_record[6], receive_bytes=network_record[7])
 
-        if not final_data:
-            return {'ip': network_record, 'error': 'Failed to perform AI analysis'}
-        
         merged_dict = network_dict.copy()
         merged_dict.update(final_data)
         return merged_dict
 
-    def process_ip_list(self, netwok_summary_list: List[List[str]], max_workers: int = 5) -> List[Dict]:
+    def process_ip_list(self, netwok_summary_list: List[List[str]], max_workers: int = 3) -> List[Dict]:
         """Process a list of IPs concurrently."""
+        # Progress tracing
+        done = 0
+        progress_tracker(len(netwok_summary_list), done)
+
+        # Actual function
         results = []
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_ip = {executor.submit(self.process_single_ip, network_record): network_record 
                           for network_record in netwok_summary_list}
             
             for future in as_completed(future_to_ip):
-                ip = future_to_ip[future]
+                network_record = future_to_ip[future]
                 try:
                     result = future.result()
                     results.append(result)
-                    self.logger.info(f"Completed analysis for IP: {ip}")
+                    self.logger.info(f"Completed analysis for IP: {network_record}")
                 except Exception as e:
-                    self.logger.error(f"Error processing IP {ip}: {str(e)}")
-                    results.append({'ip': ip, 'error': str(e)})
+                    self.logger.error(f"Error processing IP {network_record}: {str(e)}")
+                    network_dict = {
+                    "ip" : network_record[0],
+                    "total events" : network_record[1],
+                    "connects" : network_record[2],
+                    "disconnects" : network_record[3],
+                    "sends" : network_record[4],
+                    "receives" : network_record[5],
+                    "send bytes" : network_record[6],
+                    "received bytes" : network_record[7],
+                    "error": str(e).replace(",", "-"),
+                    }
+                    results.append(network_dict)
+                done += 1
+                progress_tracker(len(netwok_summary_list), done)
                 
                 # Add delay to respect API rate limits
-                time.sleep(1)
+                time.sleep(4)
         
         return results
 

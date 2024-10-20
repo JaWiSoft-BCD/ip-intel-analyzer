@@ -31,7 +31,6 @@ class IPClient:
         try:
             response = requests.get(f"http://ip-api.com/json/{ip_address}")
             response.raise_for_status()  # Raise an exception for non-2xx status codes
-            print(response.json())
             return response.json()
 
         except Exception as e:
