@@ -3,15 +3,18 @@ from typing import List, Dict
 from ip_client import IPClient
 from csv_handler import CSVHandler
 from togehter_client import TogetherClient
+from gemini_client import GeminiClient
 from config import ConfigHandler
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from utils import progress_tracker
 class IPIntelAnalyzer:
-    def __init__(self):
+    def __init__(self, use:str):
         """Initialize the IP Intelligence Analyzer."""
         self.setup_logging()
         self.config_handler = ConfigHandler()
+        self.use_gemini_ai = False if use == "together" else True
+        self.user_together_ai = False if use == "gemini" else True
         self.initialize_clients()
 
     def setup_logging(self):
@@ -30,12 +33,19 @@ class IPIntelAnalyzer:
             return False
 
         self.ip_client = IPClient()
-        self.togehter_client = TogetherClient(api_key=credentials['TOGETHER_API_KEY'])
+
+        if self.user_together_ai:
+            self.togehter_client = TogetherClient(api_key=credentials['TOGETHER_API_KEY'])
+            together_connected = self.togehter_client.connect()
+            initialized = 1 if together_connected else 0
+        if self.use_gemini_ai:
+            self.gemini_client = GeminiClient(api_key=credentials["GEMINI_API_KEY"])
+            gemini_connect =self.gemini_client.connect()
+            initialized = 1 if gemini_connect else 0
         self.csv_handler = CSVHandler()
 
-        together_connected = self.togehter_client.connect()
         
-        if not together_connected:
+        if initialized == 0:
             self.logger.error("Failed to initialize AI")
             return False
         
@@ -59,11 +69,15 @@ class IPIntelAnalyzer:
             "organisation": ip_data.get("org"),
             "isp": ip_data.get("isp")
         }
-
-        final_data = self.togehter_client.analyze_ip_data(ip_data=ip_data, ip=network_record[0], total_events=network_record[1], connects=network_record[2], disconnects=network_record[3], sends=network_record[4], receives=network_record[5], send_bytes=network_record[6], receive_bytes=network_record[7])
+        if self.use_gemini_ai:
+            final_data = self.gemini_client.analyze_ip_data(ip_data=ip_data, ip=network_record[0], total_events=network_record[1], connects=network_record[2], disconnects=network_record[3], sends=network_record[4], receives=network_record[5], send_bytes=network_record[6], receive_bytes=network_record[7])
+        
+        if self.user_together_ai:
+            final_data = self.togehter_client.analyze_ip_data(ip_data=ip_data, ip=network_record[0], total_events=network_record[1], connects=network_record[2], disconnects=network_record[3], sends=network_record[4], receives=network_record[5], send_bytes=network_record[6], receive_bytes=network_record[7])
 
         merged_dict = network_dict.copy()
         merged_dict.update(final_data)
+        time.sleep(15)
         return merged_dict
 
     def process_ip_list(self, netwok_summary_list: List[List[str]], max_workers: int = 3) -> List[Dict]:
@@ -100,9 +114,6 @@ class IPIntelAnalyzer:
                     results.append(network_dict)
                 done += 1
                 progress_tracker(len(netwok_summary_list), done)
-                
-                # Add delay to respect API rate limits
-                time.sleep(4)
         
         return results
 
@@ -135,7 +146,13 @@ class IPIntelAnalyzer:
             raise
 
 def main():
-    analyzer = IPIntelAnalyzer()
+    model_to_use = str(input("""
+    WHich AI Model do you want to user? 
+    1. Gemini
+    2. Together
+    (Defaulrt is Gemini): """))
+    model = "together" if model_to_use=="2" else "gemini"
+    analyzer = IPIntelAnalyzer(use=model)
     
     # Get list of input files
     input_files = analyzer.csv_handler.get_input_file_list()

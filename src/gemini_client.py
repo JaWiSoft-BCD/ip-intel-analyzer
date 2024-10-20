@@ -1,40 +1,43 @@
 import logging
-import together
+import google.generativeai as genai
 from typing import Dict, Optional
 
-class TogetherClient:
+class GeminiClient:
     def __init__(self, api_key: str):
         """
-        Initialize Together AI client.
+        Initialize Gemini AI client.
         
         Args:
-            api_key: Togehter API key
+            api_key: Gemini API key
         """
         self.api_key = api_key
         self.client = None
+        self.modle = None
         self.setup_logging()
 
 
     def setup_logging(self):
-        """Configure logging for the Togehter client."""
+        """Configure logging for the Gemini client."""
         logging.basicConfig(
             level=logging.INFO,
             format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
         )
-        self.logger = logging.getLogger('TogetherClient')
+        self.logger = logging.getLogger('GeminiClient')
 
     def connect(self) -> bool:
-        """Establish connection to Together API."""
+        """Establish connection to Gemini API."""
         try:
-            self.client = together.Together(api_key=self.api_key)
+            
+            genai.configure(api_key=self.api_key)
+            self.modle = genai.GenerativeModel("gemini-1.5-flash")
             return True
         except Exception as e:
-            self.logger.error(f"Failed to connect to Together API: {str(e)}")
+            self.logger.error(f"Failed to connect to Gemini API: {str(e)}")
             return False
 
     def analyze_ip_data(self, ip_data: Dict, ip, total_events: int = None, connects: int = None, disconnects: int = None, sends: int = None, receives: int = None, send_bytes: int = None, receive_bytes: int = None) -> Optional[Dict]:
         """
-        Analyze IP data using Together AI.
+        Analyze IP data using Gemini AI.
         
         Args:
             ip_data: Dictionary containing IP information from Censys
@@ -47,7 +50,7 @@ class TogetherClient:
             ip_text = ip_data.__str__()
             prompt = f"""
             You are an expert Cybersecurity Analyst specializing in network behavior analysis and threat detection.
-
+            
             INPUT DATA:
             - Full IP Information in JSON: {ip_text}
             - IP Address: {ip}
@@ -95,39 +98,8 @@ class TogetherClient:
             - No extra whitespace
             - No additional formatting
             """
-       
-            # Get Together's analysis
-            response = self.client.chat.completions.create(
-                model="meta-llama/Llama-3.2-11B-Vision-Instruct-Turbo",
-                messages=[
-                    {
-                            "role": "user",
-                            "content": [
-                                    {
-                                            "type": "text",
-                                            "text": prompt
-                                    }
-                            ]
-                    }
-
-                ],
-                max_tokens=300,
-                temperature=0.9,
-                top_p=0.2,
-                top_k=40,
-                repetition_penalty=1,
-                stop=["<|eot_id|>","<|eom_id|>"],
-                stream=True
-            )
-            # Extract the analysis from Together's response
-            analysis = ""
-            for chunk in response:
-                if hasattr(chunk, 'choices'):
-                    try:
-                        analysis +=  chunk.choices[0].delta.content
-                    except Exception:
-                        analysis += ""
-
+            response = self.modle.generate_content(prompt)
+            analysis = response.text
             print(analysis)
 
             # Parse the analysis into structured fields
@@ -142,10 +114,10 @@ class TogetherClient:
 
     def _parse_analysis(self, analysis: str) -> Dict:
         """
-        Parse Together's analysis into structured fields.
+        Parse Gemini's analysis into structured fields.
         
         Args:
-            analysis: Raw analysis text from Together
+            analysis: Raw analysis text from Gemini
             
         Returns:
             Dictionary containing parsed analysis fields
