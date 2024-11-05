@@ -24,9 +24,7 @@ class ConfigHandler:
             Dictionary containing API credentials or None if missing credentials
         """
         required_vars = {
-            'CENSYS_API_ID': os.getenv('CENSYS_API_ID'),
-            'CENSYS_API_SECRET': os.getenv('CENSYS_API_SECRET'),
-            'CLAUDE_API_KEY': os.getenv('CLAUDE_API_KEY'),
+            'GEMINI_API_KEY' : os.getenv('GEMINI_API_KEY'),
             'TOGETHER_API_KEY': os.getenv('TOGETHER_API_KEY')
         }
 
